@@ -1,6 +1,8 @@
 # Proforma
 
-This is a simple library to help you setup AWS infrastructure.
+This is a simple library to help me setup AWS infrastructure.
+
+Don't use this.  Go use Terraform or Cloud Formation.
 
 ## Usage
 
@@ -32,7 +34,7 @@ class MyRoleInlinePolicy(RoleInlinePolicy):
                     "s3:ListBucket"
                 ],
                 "Resource": [
-                    "arn:aws:s3:::ny-bucket"
+                    "arn:aws:s3:::my-bucket"
                 ]
             }),
             **options
