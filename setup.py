@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 install_requires = [line.rstrip() for line in open(os.path.join(os.path.dirname(__file__), "requirements.txt"))]
 
 setup(name='proforma',
-      version='0.0.1',
+      version='0.1.0',
       description='Simple library for setting up AWS Infrastructure.',
       url='http://github.com/HumanCellAtlas/proforma',
       author='Sam Pierson',
