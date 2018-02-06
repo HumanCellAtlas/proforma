@@ -7,12 +7,22 @@ from ..component import Component
 
 
 class ComputeEnvironment(Component):
+
+    COMPUTE_RESOURCE_DEFAULTS = {
+        'type': 'EC2',
+        'minvCpus': 0,
+        'maxvCpus': 64,
+        'desiredvCpus': 0,
+        'instanceTypes': ['m4']
+    }
+
     def __init__(self, name, **options):
         self.name = name
         self.options = options
         self.metadata = None
         super().__init__(**options)
         self.batch = boto3.client('batch')
+        self.account_id = boto3.client('sts').get_caller_identity().get('Account')
 
     def __str__(self):
         return f"Compute environment {self.name}"
@@ -30,36 +40,42 @@ class ComputeEnvironment(Component):
             raise RuntimeError("You must provide option --ami to setup the Batch Compute Environment")
         if not self.options.get('ec2_key_pair'):
             raise RuntimeError("You must provide option --ec2-key-pair to setup the Batch Compute Environment")
-        security_groups = self.options['security_groups'].split(",")
-
-        vpc = self._find_vpc()
-        account_id = boto3.client('sts').get_caller_identity().get('Account')
-        security_group_ids = [sg.id for sg in vpc.security_groups.all() if sg.group_name in security_groups]
 
         self.metadata = self.batch.create_compute_environment(
             computeEnvironmentName=self.name,
             type='MANAGED',
             state='ENABLED',
-            computeResources={
-                'type': 'EC2',  # TODO: 'SPOT'
-                'minvCpus': 0,
-                'maxvCpus': 64,
-                'desiredvCpus': 0,
-                'instanceTypes': ['m4'],
-                'imageId': self.options['ami'],
-                'subnets': [subnet.id for subnet in vpc.subnets.all()],
-                'securityGroupIds': security_group_ids,
-                'ec2KeyPair': self.options['ec2_key_pair'],
-                'instanceRole': f'arn:aws:iam::{account_id}:instance-profile/ecsInstanceRole',
-                'tags': {
-                    'Name': self.name
-                },
-                # 'bidPercentage': 123,
-                # 'spotIamFleetRole': 'string'
-            },
-            serviceRole=f'arn:aws:iam::{account_id}:role/service-role/AWSBatchServiceRole'
+            computeResources=self._compute_resource_parameters(),
+            serviceRole=f'arn:aws:iam::{self.account_id}:role/service-role/AWSBatchServiceRole'
         )
         self._wait_til_it_settles()
+
+    def _compute_resource_parameters(self):
+        vpc = self._find_vpc()
+        security_groups = self.options['security_groups'].split(",")
+        security_group_ids = [sg.id for sg in vpc.security_groups.all() if sg.group_name in security_groups]
+        compute_source = self.options.get('compute_source', 'EC2')
+        compute_resource_params = {
+            'type': compute_source,
+            'minvCpus': 0,
+            'maxvCpus': 64,
+            'desiredvCpus': 0,
+            'instanceTypes': ['m4'],
+            'imageId': self.options['ami'],
+            'subnets': [subnet.id for subnet in vpc.subnets.all()],
+            'securityGroupIds': security_group_ids,
+            'ec2KeyPair': self.options['ec2_key_pair'],
+            'instanceRole': f'arn:aws:iam::{self.account_id}:instance-profile/ecsInstanceRole',
+            'tags': {'Name': self.name}
+        }
+        if compute_source == 'SPOT':
+            compute_resource_params.update({
+                'bidPercentage': 100,
+                'spotIamFleetRole': f"arn:aws:iam::{self.account_id}:role/AmazonEC2SpotFleetRole"
+            })
+
+        compute_resource_params.update({k: self.options[k] for k in compute_resource_params if k in self.options})
+        return compute_resource_params
 
     def tear_it_down(self):
         self._disable()

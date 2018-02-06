@@ -1,3 +1,5 @@
+import time
+
 import boto3
 from botocore.errorfactory import ClientError
 
@@ -58,6 +60,37 @@ class RoleInlinePolicy(Component):
 
     def tear_it_down(self):
         self.iam.delete_role_policy(RoleName=self.role_name, PolicyName=self.name)
+
+
+class ServiceLinkedRole(Component):
+    def __init__(self, name=None, aws_service_name=None, **options):
+        self.name = name
+        self.aws_service_name = aws_service_name
+        super().__init__(**options)
+        self.iam = boto3.client('iam')
+
+    def __str__(self):
+        name = self.name or f"for {self.aws_service_name}"
+        return f"IAM service-linked role {name}"
+
+    def is_setup(self):
+        try:
+            self.iam.get_role(RoleName=self.name)
+            return True
+        except ClientError:
+            return False
+
+    def set_it_up(self):
+        self.iam.create_service_linked_role(AWSServiceName=self.aws_service_name)
+
+    def tear_it_down(self):
+        self.iam.delete_service_linked_role(RoleName=self.name)
+        while True:
+            try:
+                time.sleep(1)
+                self.iam.get_role(RoleName=self.name)
+            except ClientError:
+                return
 
 
 class Policy(Component):
