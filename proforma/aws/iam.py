@@ -121,3 +121,58 @@ class Policy(Component):
             if not version['IsDefaultVersion']:
                 self.iam.delete_policy_version(PolicyArn=self.arn, VersionId=version['VersionId'])
         self.iam.delete_policy(PolicyArn=self.arn)
+
+
+class InstanceProfile(Component):
+
+    def __init__(self, name, **options):
+        self.name = name
+        super().__init__(**options)
+        self.iam = boto3.client('iam')
+
+    def __str__(self):
+        return f"IAM Instance Profile {self.name}"
+
+    def is_setup(self):
+        try:
+            self.iam.get_instance_profile(InstanceProfileName=self.name)
+            return True
+        except ClientError:
+            return False
+
+    def set_it_up(self):
+        self.iam.create_instance_profile(InstanceProfileName=self.name)
+
+    def tear_it_down(self):
+        self.iam.delete_instance_profile(InstanceProfileName=self.name)
+
+
+class InstanceProfileRoleAttachment(Component):
+    def __init__(self, instance_profile_name, role_name, **options):
+        self.instance_profile_name = instance_profile_name
+        self.role_name = role_name
+        super().__init__(**options)
+        self.iam = boto3.client('iam')
+
+    def __str__(self):
+        return f"IAM Instance Profile Role Attachment for {self.instance_profile_name}"
+
+    def is_setup(self):
+        try:
+            response = self.iam.list_instance_profiles_for_role(RoleName=self.role_name)
+            instance_profiles = [ip['InstanceProfileName'] for ip in response['InstanceProfiles']]
+            return self.instance_profile_name in instance_profiles
+        except ClientError:
+            return False
+
+    def set_it_up(self):
+        self.iam.add_role_to_instance_profile(
+            InstanceProfileName=self.instance_profile_name,
+            RoleName=self.role_name
+        )
+
+    def tear_it_down(self):
+        self.iam.remove_role_from_instance_profile(
+            InstanceProfileName=self.instance_profile_name,
+            RoleName=self.role_name
+        )
