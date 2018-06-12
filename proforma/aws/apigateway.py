@@ -32,7 +32,7 @@ class RestApi(Component):
         time.sleep(10)
 
     def _load(self):
-        for rest_api in self.apig.get_rest_apis()['items']:
+        for rest_api in self.apig.get_rest_apis(limit=500)['items']:
             if rest_api['name'] == self.name:
                 for stage in self.apig.get_stages(restApiId=rest_api['id'])['item']:
                     if stage['stageName'] == self.stage_name:
